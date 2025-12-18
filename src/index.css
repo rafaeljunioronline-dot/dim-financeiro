@@ -1,0 +1,6 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/* Importações de Bibliotecas */
+@import 'react-datepicker/dist/react-datepicker.css';
+/* Você pode adicionar estilos de fonte aqui também se quiser */
