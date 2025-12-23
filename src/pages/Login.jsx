@@ -4,10 +4,13 @@ import { supabase } from '../supabaseClient';
 export default function Login() {
   // Estados
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState(''); // NOVO: Estado para o email real
+  const [email, setEmail] = useState(''); 
   const [code, setCode] = useState('');
   const [step, setStep] = useState('PHONE'); // PHONE ou CODE
   const [loading, setLoading] = useState(false);
+
+  // PEGA A URL CERTA (Seja no PC ou na Vercel)
+  const API_URL = import.meta.env.VITE_API_URL;
 
   // 1. PEDIR CÓDIGO (Envia WhatsApp e Email Real para o Robô)
   const handleSendCode = async (e) => {
@@ -22,14 +25,13 @@ export default function Login() {
     }
 
     try {
-      // Chama a API do Robô (Backend)
-      // Agora enviamos o email junto para salvar no cadastro!
-      const response = await fetch('http://localhost:3000/api/login-solicitar', {
+      // AQUI ESTAVA O ERRO: Trocamos localhost pela variável API_URL
+      const response = await fetch(`${API_URL}/api/login-solicitar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            phone: phone.replace(/\D/g, ''), // Envia só números
-            email: email // Envia o email real digitado
+            phone: phone.replace(/\D/g, ''), 
+            email: email 
         })
       });
       
@@ -43,7 +45,7 @@ export default function Login() {
       }
     } catch (error) {
       console.error(error);
-      alert("Erro ao conectar com o Robô. O servidor está rodando?");
+      alert("Erro ao conectar com o Robô. Verifique sua conexão.");
     } finally {
       setLoading(false);
     }
@@ -54,14 +56,14 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      // Verifica o código com o Robô
-      const response = await fetch('http://localhost:3000/api/login-verificar', {
+      // AQUI TAMBÉM: Trocamos localhost pela variável API_URL
+      const response = await fetch(`${API_URL}/api/login-verificar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             phone: phone.replace(/\D/g, ''), 
             code,
-            email // Envia novamente para garantir atualização se for o primeiro login
+            email 
         })
       });
 
@@ -72,17 +74,13 @@ export default function Login() {
         
         // Login Oficial no Supabase
         const { data: authData, error } = await supabase.auth.signInWithPassword({
-          email: data.email, // O email @login.dim gerado pelo robô
+          email: data.email, 
           password: data.password
         });
 
         if (error) throw error;
-
-        // Opcional: Atualizar o profile com o email real agora, caso a API não tenha feito
-        // Mas idealmente sua API Node já fez isso.
         
         console.log("Login realizado!", authData);
-        // O App.jsx cuidará do redirecionamento
       } else {
         alert("Código incorreto ou expirado.");
       }
@@ -113,7 +111,6 @@ export default function Login() {
           <form onSubmit={handleSendCode}>
             <p style={styles.subtitle}>Acesse sua conta ou cadastre-se</p>
             
-            {/* Campo WhatsApp */}
             <div style={{textAlign: 'left'}}>
                 <label style={styles.label}>Seu WhatsApp</label>
                 <input 
@@ -126,7 +123,6 @@ export default function Login() {
                 />
             </div>
 
-            {/* Campo Email Real (NOVO) */}
             <div style={{textAlign: 'left'}}>
                 <label style={styles.label}>Seu Melhor E-mail</label>
                 <input 
