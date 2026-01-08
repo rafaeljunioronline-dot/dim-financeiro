@@ -1,23 +1,49 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import ReservesModal from '../components/ReservesModal'; 
+import ReservesModal from '../components/ReservesModal';
 import EditBalanceModal from '../components/EditBalanceModal';
-// ✅ 1. IMPORTAÇÃO DOS NOVOS COMPONENTES (Verifique se o caminho ../ está correto para sua pasta)
 import { DataBR } from '../components/ui/DataBR';
 import { Grana } from '../components/ui/Grana';
-
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
-export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPage }) {
+// NOVO: Componente de Banner do Trial
+const TrialBanner = ({ daysLeft }) => {
+    if (daysLeft > 3) return null; // Se tem mais de 3 dias (ou é VIP), não mostra nada
+    
+    let bgColor = '#3b82f6'; // Azul (Padrão)
+    let msg = `💎 Você tem ${daysLeft} dias de teste grátis. Aproveite!`;
+
+    if (daysLeft <= 1) {
+        bgColor = '#eab308'; // Amarelo (Urgente)
+        msg = "⚠️ Atenção: Seu teste acaba em breve. Assine para não perder o acesso.";
+    }
+
+    return (
+        <div style={{
+            backgroundColor: bgColor, 
+            color: 'white', // Texto branco para contraste 
+            padding: '12px', 
+            borderRadius: '8px', 
+            marginBottom: '20px', 
+            fontWeight: 'bold', 
+            textAlign: 'center',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+        }}>
+            {msg}
+        </div>
+    );
+};
+
+export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPage, planStatus, daysLeft }) {
   const [loading, setLoading] = useState(true);
   const [currentBalance, setCurrentBalance] = useState(0);
   const [periodIncome, setPeriodIncome] = useState(0);
   const [periodExpense, setPeriodExpense] = useState(0);
   const [reservesTotal, setReservesTotal] = useState(0);
-  const [showReserves, setShowReserves] = useState(false); 
+  const [showReserves, setShowReserves] = useState(false);
   const [isReservesOpen, setIsReservesOpen] = useState(false);
   const [showBalance, setShowBalance] = useState(() => localStorage.getItem('showPersonalBalance') === 'true');
-  const [filterType, setFilterType] = useState('MONTH'); 
+  const [filterType, setFilterType] = useState('MONTH');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [transactionsList, setTransactionsList] = useState([]);
@@ -52,11 +78,11 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
     try {
       const { data: allTrans } = await supabase.from('transactions').select('id, amount, type, description, category, transaction_date, created_at').eq('wallet_id', wallet.id);
       const { data: allReserves } = await supabase.from('reserves').select('current_amount').eq('wallet_id', wallet.id);
-      
+
       if (allTrans) {
         const totalInc = allTrans.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
         const totalExp = allTrans.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
-        setCurrentBalance(totalInc - totalExp); 
+        setCurrentBalance(totalInc - totalExp);
         const filtered = allTrans.filter(t => t.transaction_date >= startDate && t.transaction_date <= endDate);
         filtered.sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
         setTransactionsList(filtered);
@@ -67,24 +93,22 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
     } catch (error) { console.error(error); } finally { setLoading(false); }
   }
 
-  // Mantive formatMoney apenas para os Cards do Topo (para não quebrar suas cores personalizadas)
   const formatMoney = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
-  // --- ESTILOS DARK ---
   const styles = {
     container: { maxWidth: '1200px', margin: '0 auto', paddingBottom: '60px', fontFamily: 'sans-serif', color: '#e4e4e7' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' },
     title: { fontSize: '1.5rem', fontWeight: '800', color: 'white' },
     subTitle: { fontSize: '0.9rem', color: '#a1a1aa' },
-    addBtn: { 
-        backgroundColor: '#27272a', color: 'white', padding: '10px 20px', borderRadius: '8px', 
-        border: '1px solid #3f3f46', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem', 
+    addBtn: {
+        backgroundColor: '#27272a', color: 'white', padding: '10px 20px', borderRadius: '8px',
+        border: '1px solid #3f3f46', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem',
         display: 'flex', alignItems: 'center', gap: '8px'
     },
     topRow: { display: 'flex', gap: '20px', marginBottom: '30px', flexWrap: 'wrap' },
-    miniCard: { 
+    miniCard: {
         flex: 1, minWidth: '240px', backgroundColor: '#18181b',
-        padding: '24px', borderRadius: '12px', border: '1px solid #27272a', 
+        padding: '24px', borderRadius: '12px', border: '1px solid #27272a',
         display: 'flex', flexDirection: 'column', justifyContent: 'center'
     },
     miniHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
@@ -96,9 +120,9 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
     filterLabel: { fontSize: '0.85rem', fontWeight: '700', marginBottom: '10px', color: '#71717a' },
     filterBar: { display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', backgroundColor: '#18181b', padding: '15px', borderRadius: '8px', border: '1px solid #27272a' },
     filterBtn: (active) => ({
-        padding: '8px 16px', borderRadius: '6px', border: active ? '1px solid #facc15' : '1px solid #3f3f46', 
-        cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600', 
-        backgroundColor: active ? '#facc15' : 'transparent', 
+        padding: '8px 16px', borderRadius: '6px', border: active ? '1px solid #facc15' : '1px solid #3f3f46',
+        cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600',
+        backgroundColor: active ? '#facc15' : 'transparent',
         color: active ? 'black' : '#a1a1aa', transition: 'all 0.2s'
     }),
     dateInput: { padding: '8px', borderRadius: '6px', border: '1px solid #3f3f46', backgroundColor: '#27272a', color: 'white', outline: 'none', fontSize: '0.9rem' },
@@ -118,6 +142,10 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
 
   return (
     <div style={styles.container}>
+      
+      {/* 🔴 AQUI ESTÁ O NOVO BANNER DE AVISO */}
+      {planStatus === 'TRIAL' && <TrialBanner daysLeft={daysLeft} />}
+
       <div style={styles.header}>
         <div style={styles.titleBox}>
             <h2 style={styles.title}>Minhas Finanças</h2>
@@ -130,7 +158,7 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
         <div style={styles.miniCard}>
             <div style={styles.miniHeader}>
                 <span style={styles.miniLabel}>Meu Saldo</span>
-                <button onClick={toggleBalance} style={styles.eyeBtn}>{showBalance ? '✕' : '👁'}</button>
+                <button onClick={toggleBalance} style={styles.eyeBtn}>{showBalance ? '👁️' : '🙈'}</button>
             </div>
             <div style={styles.miniValue}>{showBalance ? formatMoney(currentBalance) : 'R$ •••••'}</div>
             <button style={styles.textBtn} onClick={() => setIsAdjustOpen(true)}>Ajustar saldo</button>
@@ -138,7 +166,7 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
         <div style={styles.miniCard}>
             <div style={styles.miniHeader}>
                 <span style={styles.miniLabel}>Cofrinho</span>
-                <button onClick={() => setShowReserves(!showReserves)} style={styles.eyeBtn}>{showReserves ? '✕' : '👁'}</button>
+                <button onClick={() => setShowReserves(!showReserves)} style={styles.eyeBtn}>{showReserves ? '👁️' : '🙈'}</button>
             </div>
             <div style={styles.miniValue}>{showReserves ? formatMoney(reservesTotal) : 'R$ •••••'}</div>
             <button style={styles.textBtn} onClick={() => setIsReservesOpen(true)}>Gerenciar</button>
@@ -165,7 +193,6 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
       </div>
 
       <div style={styles.listContainer}>
-        {/* ✅ AQUI: Header com DataBR */}
         <div style={styles.listHeader}>
             Extrato (<DataBR valor={startDate}/> a <DataBR valor={endDate}/>)
         </div>
@@ -176,11 +203,9 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
                         <span style={styles.transDesc}>{t.description}</span>
                         <br/>
                         <span style={styles.transMeta}>
-                           {/* ✅ AQUI: DataBR corrigindo o dia */}
                            <DataBR valor={t.transaction_date} /> • {t.category}
                         </span>
                     </div>
-                    {/* ✅ AQUI: Grana formatando o valor */}
                     <Grana valor={t.amount} tipo={t.type} />
                 </div>
             ))}
