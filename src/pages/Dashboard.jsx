@@ -6,29 +6,19 @@ import { DataBR } from '../components/ui/DataBR';
 import { Grana } from '../components/ui/Grana';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
-// NOVO: Componente de Banner do Trial
+// BANNER DO TRIAL (Mantido)
 const TrialBanner = ({ daysLeft }) => {
-    if (daysLeft > 3) return null; // Se tem mais de 3 dias (ou é VIP), não mostra nada
-    
-    let bgColor = '#3b82f6'; // Azul (Padrão)
+    if (daysLeft > 3) return null;
+    let bgColor = '#3b82f6';
     let msg = `💎 Você tem ${daysLeft} dias de teste grátis. Aproveite!`;
 
     if (daysLeft <= 1) {
-        bgColor = '#eab308'; // Amarelo (Urgente)
+        bgColor = '#eab308';
         msg = "⚠️ Atenção: Seu teste acaba em breve. Assine para não perder o acesso.";
     }
 
     return (
-        <div style={{
-            backgroundColor: bgColor, 
-            color: 'white', // Texto branco para contraste 
-            padding: '12px', 
-            borderRadius: '8px', 
-            marginBottom: '20px', 
-            fontWeight: 'bold', 
-            textAlign: 'center',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-        }}>
+        <div style={{ backgroundColor: bgColor, color: 'white', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontWeight: 'bold', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
             {msg}
         </div>
     );
@@ -40,9 +30,12 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
   const [periodIncome, setPeriodIncome] = useState(0);
   const [periodExpense, setPeriodExpense] = useState(0);
   const [reservesTotal, setReservesTotal] = useState(0);
+  
+  // ESTADOS DE VISIBILIDADE (OLHO)
   const [showReserves, setShowReserves] = useState(false);
-  const [isReservesOpen, setIsReservesOpen] = useState(false);
   const [showBalance, setShowBalance] = useState(() => localStorage.getItem('showPersonalBalance') === 'true');
+  
+  const [isReservesOpen, setIsReservesOpen] = useState(false);
   const [filterType, setFilterType] = useState('MONTH');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -115,7 +108,10 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
     miniLabel: { fontSize: '0.75rem', color: '#71717a', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' },
     miniValue: { fontSize: '1.8rem', fontWeight: '800', color: '#facc15', letterSpacing: '-0.5px' },
     textBtn: { fontSize: '0.85rem', color: '#a1a1aa', cursor: 'pointer', marginTop: '10px', background: 'none', border: 'none', fontWeight: '600', padding: 0, textAlign: 'left', textDecoration: 'underline' },
-    eyeBtn: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#52525b', padding: '4px' },
+    
+    // MUDANÇA AQUI: Botão do olho mais limpo
+    eyeBtn: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#71717a', padding: '4px', transition: 'color 0.2s' },
+    
     filterContainer: { marginBottom: '25px' },
     filterLabel: { fontSize: '0.85rem', fontWeight: '700', marginBottom: '10px', color: '#71717a' },
     filterBar: { display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', backgroundColor: '#18181b', padding: '15px', borderRadius: '8px', border: '1px solid #27272a' },
@@ -143,7 +139,6 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
   return (
     <div style={styles.container}>
       
-      {/* 🔴 AQUI ESTÁ O NOVO BANNER DE AVISO */}
       {planStatus === 'TRIAL' && <TrialBanner daysLeft={daysLeft} />}
 
       <div style={styles.header}>
@@ -158,7 +153,10 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
         <div style={styles.miniCard}>
             <div style={styles.miniHeader}>
                 <span style={styles.miniLabel}>Meu Saldo</span>
-                <button onClick={toggleBalance} style={styles.eyeBtn}>{showBalance ? '👁️' : '🙈'}</button>
+                {/* 🔒 AQUI: Se estiver visível mostra Olho, se não mostra Cadeado */}
+                <button onClick={toggleBalance} style={styles.eyeBtn} title={showBalance ? "Ocultar" : "Mostrar"}>
+                    {showBalance ? '👁️' : '🔒'}
+                </button>
             </div>
             <div style={styles.miniValue}>{showBalance ? formatMoney(currentBalance) : 'R$ •••••'}</div>
             <button style={styles.textBtn} onClick={() => setIsAdjustOpen(true)}>Ajustar saldo</button>
@@ -166,7 +164,10 @@ export default function Dashboard({ wallet, refreshTrigger, onOpenAdjust, setPag
         <div style={styles.miniCard}>
             <div style={styles.miniHeader}>
                 <span style={styles.miniLabel}>Cofrinho</span>
-                <button onClick={() => setShowReserves(!showReserves)} style={styles.eyeBtn}>{showReserves ? '👁️' : '🙈'}</button>
+                {/* 🔒 AQUI: Tirei o macaco, coloquei o cadeado */}
+                <button onClick={() => setShowReserves(!showReserves)} style={styles.eyeBtn} title={showReserves ? "Ocultar" : "Mostrar"}>
+                    {showReserves ? '👁️' : '🔒'}
+                </button>
             </div>
             <div style={styles.miniValue}>{showReserves ? formatMoney(reservesTotal) : 'R$ •••••'}</div>
             <button style={styles.textBtn} onClick={() => setIsReservesOpen(true)}>Gerenciar</button>
