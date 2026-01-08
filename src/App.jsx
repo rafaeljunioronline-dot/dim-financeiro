@@ -88,20 +88,13 @@ function App() {
 
   // --- AUTENTICAÇÃO E PLANO ---
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) {
-        checkUserPlan(session.user.id);
-        fetchAllWallets();
-        checkTourStatus();
-      }
-    });
-
+    // Escuta mudanças na autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
         checkUserPlan(session.user.id);
-        fetchAllWallets();
+        // Só busca carteiras se tiver usuário, e passamos o ID para garantir
+        fetchAllWallets(session.user.id);
         checkTourStatus();
       } else {
         setWallets([]);
@@ -109,32 +102,30 @@ function App() {
         setPlanStatus(null);
       }
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
-  // --- NOVA VERIFICAÇÃO DE PLANO ---
+  // --- VERIFICAÇÃO DE PLANO ---
   const checkUserPlan = async (userId) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('plan_status, valid_until')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error || !data) {
-        // Se não achar perfil, assume bloqueado ou erro
         setPlanStatus('EXPIRED');
         return;
       }
 
-      // Se for VIP, libera tudo
       if (data.plan_status === 'VIP') {
         setPlanStatus('ACTIVE');
         setDaysLeft(999);
         return;
       }
 
-      // Verifica datas
       const validUntil = new Date(data.valid_until);
       const now = new Date();
       const diffTime = validUntil - now;
@@ -145,9 +136,8 @@ function App() {
       if (daysRemaining < 0) {
         setPlanStatus('EXPIRED');
       } else {
-        setPlanStatus(data.plan_status); // 'TRIAL' ou 'ACTIVE'
+        setPlanStatus(data.plan_status);
       }
-
     } catch (error) {
       console.error('Erro plano:', error);
       setPlanStatus('EXPIRED');
@@ -165,32 +155,61 @@ function App() {
     setPlanStatus(null);
   };
 
-  async function fetchAllWallets() {
+  // --- CORREÇÃO: BUSCAR CARTEIRAS COM TRAVA DE DUPLICAÇÃO ---
+  async function fetchAllWallets(userId) {
+    if (!userId) return;
     setLoadingWallet(true);
     try {
       const { data, error } = await supabase.from('wallets').select('*').order('created_at', { ascending: true });
       if (error) throw error;
-      if (!data || data.length === 0) { await createDefaultPersonalWallet(); }
-      else { setWallets(data); if (!currentWallet) setCurrentWallet(data[0]); }
-    } catch (error) { console.error("Erro wallets:", error.message); } finally { setLoadingWallet(false); }
+      
+      if (!data || data.length === 0) { 
+          // Se não achou nada, tenta criar a padrão
+          await createDefaultPersonalWallet(userId); 
+      } else { 
+          setWallets(data); 
+          // Mantém a carteira atual ou pega a primeira
+          if (!currentWallet) setCurrentWallet(data[0]); 
+      }
+    } catch (error) { 
+        console.error("Erro wallets:", error.message); 
+    } finally { 
+        setLoadingWallet(false); 
+    }
   }
 
-  const createDefaultPersonalWallet = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: newWallet } = await supabase.from('wallets').insert([{ name: 'Minha Carteira', type: 'PERSONAL', user_id: user.id }]).select().single();
+  // --- CORREÇÃO: CRIAÇÃO SEGURA DA CARTEIRA ---
+  const createDefaultPersonalWallet = async (userId) => {
+    if (!userId) return;
+
+    // 1. TRAVA DE SEGURANÇA: Verifica no banco se JÁ EXISTE alguma carteira para este usuário
+    // Isso evita que o React crie 2 ou 3 vezes ao mesmo tempo
+    const { data: existing, error } = await supabase.from('wallets').select('id').eq('user_id', userId).limit(1);
+    
+    if (existing && existing.length > 0) {
+        // Se já existe, aborta a criação e apenas recarrega a lista
+        const { data: list } = await supabase.from('wallets').select('*').order('created_at', { ascending: true });
+        setWallets(list);
+        if(list.length > 0) setCurrentWallet(list[0]);
+        return; 
+    }
+
+    // 2. Se realmente não existe, cria a nova
+    const { data: newWallet } = await supabase.from('wallets').insert([{ name: 'Minha Carteira', type: 'PERSONAL', user_id: userId }]).select().single();
+    
     if (newWallet) {
         const defaultCats = [
-            { user_id: user.id, name: 'Alimentação', type: 'EXPENSE', scope: 'PERSONAL', color: '#f87171' },
-            { user_id: user.id, name: 'Transporte', type: 'EXPENSE', scope: 'PERSONAL', color: '#fb923c' },
-            { user_id: user.id, name: 'Moradia', type: 'EXPENSE', scope: 'PERSONAL', color: '#60a5fa' },
-            { user_id: user.id, name: 'Lazer', type: 'EXPENSE', scope: 'PERSONAL', color: '#a78bfa' },
-            { user_id: user.id, name: 'Saúde', type: 'EXPENSE', scope: 'PERSONAL', color: '#ef4444' },
-            { user_id: user.id, name: 'Renda Extra', type: 'INCOME', scope: 'PERSONAL', color: '#4ade80' },
-            { user_id: user.id, name: 'Salário', type: 'INCOME', scope: 'PERSONAL', color: '#22c55e' }
+            { user_id: userId, name: 'Alimentação', type: 'EXPENSE', scope: 'PERSONAL', color: '#f87171' },
+            { user_id: userId, name: 'Transporte', type: 'EXPENSE', scope: 'PERSONAL', color: '#fb923c' },
+            { user_id: userId, name: 'Moradia', type: 'EXPENSE', scope: 'PERSONAL', color: '#60a5fa' },
+            { user_id: userId, name: 'Lazer', type: 'EXPENSE', scope: 'PERSONAL', color: '#a78bfa' },
+            { user_id: userId, name: 'Saúde', type: 'EXPENSE', scope: 'PERSONAL', color: '#ef4444' },
+            { user_id: userId, name: 'Renda Extra', type: 'INCOME', scope: 'PERSONAL', color: '#4ade80' },
+            { user_id: userId, name: 'Salário', type: 'INCOME', scope: 'PERSONAL', color: '#22c55e' }
         ];
         await supabase.from('categories').insert(defaultCats);
-        setWallets([newWallet]); setCurrentWallet(newWallet);
+        setWallets([newWallet]); 
+        setCurrentWallet(newWallet);
     }
   };
 
@@ -208,7 +227,7 @@ function App() {
           { user_id: user.id, name: 'Operacional', type: 'EXPENSE', scope: 'BUSINESS', color: '#fb923c' }
       ];
       await supabase.from('categories').insert(businessCats);
-      showToast(`Empresa "${name}" criada!`); await fetchAllWallets();
+      showToast(`Empresa "${name}" criada!`); await fetchAllWallets(user.id);
       setTimeout(async () => {
           const { data: newList } = await supabase.from('wallets').select('*').order('created_at', { ascending: true });
           const created = newList.find(w => w.name === name); if(created) handleSwitchWallet(created);
@@ -243,7 +262,6 @@ function App() {
     const openAdjust = (balance) => { setCurrentBalanceToAdjust(balance); setIsAdjustModalOpen(true); };
     const openSalary = () => setIsSalaryModalOpen(true);
     
-    // Passamos o status do plano e dias restantes para o Dashboard
     const commonProps = { 
         wallet: currentWallet, 
         setPage, 
@@ -251,8 +269,8 @@ function App() {
         showToast, 
         requestConfirm, 
         onOpenAdjust: openAdjust,
-        planStatus, // NOVO
-        daysLeft // NOVO
+        planStatus, 
+        daysLeft
     };
 
     if (page === "dashboard") return isBusiness ? <BusinessDashboard {...commonProps} onOpenSalary={openSalary} /> : <Dashboard {...commonProps} />;
@@ -277,8 +295,6 @@ function App() {
     }
   };
 
-  // --- RENDERIZAÇÃO FINAL ---
-
   if (!session) return <Login />;
 
   if (planStatus === null) {
@@ -289,7 +305,6 @@ function App() {
     );
   }
 
-  // SE O PLANO EXPIROU, MOSTRA O CADEADO
   if (planStatus === 'EXPIRED') {
     return <LockScreen user={session.user} />;
   }
