@@ -36,7 +36,7 @@ export default function Login() {
     setStep(2);
   };
 
-  // 3. FINALIZAR CADASTRO (Cria conta + Define Plano)
+  // 3. FINALIZAR CADASTRO (O Combo Completo)
   const handleSignUp = async (planType) => {
     setLoading(true);
     
@@ -47,26 +47,26 @@ export default function Login() {
     // Calcula validade baseado no plano
     const hoje = new Date();
     let validUntil = new Date();
-    let status = 'ACTIVE'; // Por padrão ativo
+    let status = 'ACTIVE'; 
 
     if (planType === 'TRIAL') {
         validUntil.setDate(hoje.getDate() + 3);
         status = 'TRIAL';
     } else if (planType === 'MONTHLY') {
         validUntil.setDate(hoje.getDate() + 30);
-        status = 'WAITING_PAYMENT'; // Mensal/Anual entra como aguardando pagto
+        status = 'WAITING_PAYMENT'; 
     } else if (planType === 'YEARLY') {
         validUntil.setDate(hoje.getDate() + 365);
         status = 'WAITING_PAYMENT';
     }
 
     try {
-      // 1. Cria Auth
+      // A. CRIA USUÁRIO (Auth)
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
 
       if (data?.user) {
-        // 2. Salva Perfil e Assinatura
+        // B. SALVA PERFIL (Profile)
         const { error: profileError } = await supabase.from('profiles').upsert({
             id: data.user.id,
             phone: cleanPhone,
@@ -74,14 +74,35 @@ export default function Login() {
             valid_until: validUntil.toISOString()
         });
 
-        // Opcional: Criar registro na tabela subscriptions se você usa ela
-        // await supabase.from('subscriptions').insert({...})
-
         if (profileError) throw profileError;
+
+        // C. CRIA A CARTEIRA PESSOAL (Essencial!)
+        // Isso garante que o usuário já comece com a carteira criada
+        const { data: walletData, error: walletError } = await supabase
+            .from('wallets')
+            .insert([{ name: 'Minha Carteira', type: 'PERSONAL', user_id: data.user.id }])
+            .select()
+            .single();
+
+        if (walletError) throw walletError;
+
+        // D. CRIA AS CATEGORIAS PADRÃO
+        // Isso garante que o robô do WhatsApp saiba onde jogar os gastos
+        if (walletData) {
+            const defaultCats = [
+                { user_id: data.user.id, name: 'Alimentação', type: 'EXPENSE', scope: 'PERSONAL', color: '#f87171' },
+                { user_id: data.user.id, name: 'Transporte', type: 'EXPENSE', scope: 'PERSONAL', color: '#fb923c' },
+                { user_id: data.user.id, name: 'Moradia', type: 'EXPENSE', scope: 'PERSONAL', color: '#60a5fa' },
+                { user_id: data.user.id, name: 'Lazer', type: 'EXPENSE', scope: 'PERSONAL', color: '#a78bfa' },
+                { user_id: data.user.id, name: 'Saúde', type: 'EXPENSE', scope: 'PERSONAL', color: '#ef4444' },
+                { user_id: data.user.id, name: 'Compras', type: 'EXPENSE', scope: 'PERSONAL', color: '#ec4899' },
+                { user_id: data.user.id, name: 'Renda Extra', type: 'INCOME', scope: 'PERSONAL', color: '#4ade80' },
+                { user_id: data.user.id, name: 'Salário', type: 'INCOME', scope: 'PERSONAL', color: '#22c55e' }
+            ];
+            await supabase.from('categories').insert(defaultCats);
+        }
         
-        alert('Conta criada com sucesso!');
-        // Se for TRIAL, já loga direto (o App.jsx cuida do resto)
-        // Se for PAGAMENTO, poderia redirecionar, mas vamos logar e mostrar bloqueio depois
+        alert('Conta criada com sucesso! Entrando...');
         window.location.reload(); 
       }
     } catch (error) {
@@ -90,7 +111,6 @@ export default function Login() {
     }
   };
 
-  // ESTILOS (Mantive os seus e adicionei novos para os Cards)
   const styles = {
     container: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#09090b', color: 'white', fontFamily: 'sans-serif', padding: '20px' },
     card: { backgroundColor: '#18181b', padding: '40px', borderRadius: '12px', width: '100%', maxWidth: '400px', textAlign: 'center', border: '1px solid #27272a' },
@@ -99,8 +119,6 @@ export default function Login() {
     btn: { width: '100%', padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: '#16a34a', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem', marginTop: '10px' },
     backBtn: { background: 'none', border: 'none', color: '#a1a1aa', marginTop: '10px', cursor: 'pointer' },
     switchBtn: { background: 'none', border: 'none', color: '#a1a1aa', marginTop: '20px', cursor: 'pointer', fontSize: '0.9rem', textDecoration: 'underline' },
-    
-    // Estilos dos Cards de Plano
     planCard: { border: '1px solid #3f3f46', borderRadius: '8px', padding: '15px', marginBottom: '10px', cursor: 'pointer', textAlign: 'left', transition: '0.2s' },
     planTitle: { fontWeight: 'bold', fontSize: '1.1rem', color: 'white' },
     planPrice: { color: '#facc15', fontWeight: 'bold', fontSize: '1rem' },
@@ -114,7 +132,6 @@ export default function Login() {
             {mode === 'LOGIN' ? 'Acessar DIM' : (step === 1 ? 'Criar Conta' : 'Escolha seu Plano')}
         </h1>
         
-        {/* MODO LOGIN */}
         {mode === 'LOGIN' && (
             <form onSubmit={handleLogin}>
                 <input type="email" placeholder="Seu E-mail" value={email} onChange={e => setEmail(e.target.value)} required style={styles.input} />
@@ -124,7 +141,6 @@ export default function Login() {
             </form>
         )}
 
-        {/* MODO SIGNUP - PASSO 1 (DADOS) */}
         {mode === 'SIGNUP' && step === 1 && (
             <form onSubmit={handleNextStep}>
                 <input type="tel" placeholder="Seu WhatsApp (Ex: 11999999999)" value={phone} onChange={e => setPhone(e.target.value)} required style={styles.input} />
@@ -135,7 +151,6 @@ export default function Login() {
             </form>
         )}
 
-        {/* MODO SIGNUP - PASSO 2 (PLANOS) */}
         {mode === 'SIGNUP' && step === 2 && (
             <div>
                 <div style={{...styles.planCard, borderColor: '#22c55e', backgroundColor: '#22c55e10'}} onClick={() => handleSignUp('TRIAL')}>
@@ -156,7 +171,7 @@ export default function Login() {
                     <div style={styles.planDesc}>Economize 2 meses.</div>
                 </div>
 
-                {loading && <p>Criando conta...</p>}
+                {loading && <p>Criando conta e carteira...</p>}
                 <button onClick={() => setStep(1)} style={styles.backBtn}>Voltar</button>
             </div>
         )}
